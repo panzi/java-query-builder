@@ -16,6 +16,7 @@ import java.util.Map.Entry;
 import io.github.panzi.sql.annotations.Field;
 import io.github.panzi.sql.annotations.Mapping;
 import io.github.panzi.sql.config.Config;
+import io.github.panzi.sql.internal.ColumnName;
 import io.github.panzi.sql.internal.Name;
 import io.github.panzi.sql.internal.Util;
 
@@ -26,6 +27,10 @@ public class QueryBuilder extends QueryBuilderBase<QueryBuilder> {
 
 	public static Name name(String name) {
 		return new Name(name);
+	}
+
+	public static ColumnName column(String name) {
+		return new ColumnName(name);
 	}
 
 	public static Order asc(String column) {
