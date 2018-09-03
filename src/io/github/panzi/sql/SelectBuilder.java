@@ -1,7 +1,5 @@
 package io.github.panzi.sql;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.sql.Blob;
 import java.sql.Connection;
@@ -14,6 +12,9 @@ import java.util.List;
 import java.util.Set;
 
 import io.github.panzi.sql.config.Config;
+import io.github.panzi.sql.internal.ColumnName;
+import io.github.panzi.sql.internal.LoadContext;
+import io.github.panzi.sql.internal.Util;
 
 public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 	private final String tablename;
@@ -83,7 +84,7 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 
 		return new SelectBuilder<T>(this, this.select + ", " + select, tablename, cls, include, order, offset, limit);
 	}
-	
+
 	private String getTableName() {
 		String tablename = this.tablename;
 		if (tablename == null && cls != null) {
@@ -152,6 +153,10 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 	}
 
 	public<NewT> SelectBuilder<NewT> from(Class<NewT> cls) {
+		return new SelectBuilder<NewT>(this, select, tablename, cls, include, order, offset, limit);
+	}
+
+	public<NewT> SelectBuilder<NewT> from(Class<NewT> cls, String tablename) {
 		return new SelectBuilder<NewT>(this, select, tablename, cls, include, order, offset, limit);
 	}
 
@@ -227,151 +232,143 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 	}
 
 	@SuppressWarnings("unchecked")
-	static private<T> T fetch(Class<T> cls, ResultSet rs, Set<String> columns) throws SQLException {
+	private<Type> Type fetch(Class<Type> cls, LoadContext ctx) throws SQLException {
 		try {
 			if (cls == Byte.class || cls == byte.class) {
-				return (T)(Byte)rs.getByte(1);
+				return (Type)(Byte)ctx.data.getByte(1);
 			} else if (cls == Short.class || cls == short.class) {
-				return (T)(Short)rs.getShort(1);
+				return (Type)(Short)ctx.data.getShort(1);
 			} else if (cls == Integer.class || cls == int.class) {
-				return (T)(Integer)rs.getInt(1);
+				return (Type)(Integer)ctx.data.getInt(1);
 			} else if (cls == Long.class || cls == long.class) {
-				return (T)(Long)rs.getLong(1);
+				return (Type)(Long)ctx.data.getLong(1);
 			} else if (cls == Float.class || cls == float.class) {
-				return (T)(Float)rs.getFloat(1);
+				return (Type)(Float)ctx.data.getFloat(1);
 			} else if (cls == Double.class || cls == double.class) {
-				return (T)(Double)rs.getDouble(1);
+				return (Type)(Double)ctx.data.getDouble(1);
 			} else if (cls == Boolean.class || cls == boolean.class) {
-				return (T)(Boolean)rs.getBoolean(1);
+				return (Type)(Boolean)ctx.data.getBoolean(1);
 			} else if (cls == Character.class || cls == char.class) {
-				return (T)(Character)rs.getString(1).charAt(0);
+				return (Type)(Character)ctx.data.getString(1).charAt(0);
 			} else if (cls == Object.class) {
-				return (T)rs.getObject(1);
+				return cls.cast(ctx.data.getObject(1));
 			} else if (cls == String.class) {
-				return (T)rs.getString(1);
+				return cls.cast(ctx.data.getString(1));
 			} else if (cls == java.util.Date.class || cls == java.util.Date.class) {
-				return (T)rs.getDate(1);
+				return cls.cast(ctx.data.getDate(1));
 			} else if (cls == Blob.class) {
-				return (T)rs.getBlob(1);
+				return cls.cast(ctx.data.getBlob(1));
 			} else if (cls == BigDecimal.class) {
-				return (T)rs.getBigDecimal(1);
+				return cls.cast(ctx.data.getBigDecimal(1));
 			} else if (cls.isArray()) {
 				if (cls == byte[].class) {
-					byte[] array = new byte[columns.size()];
-					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getByte(index + 1);
-					}
-					return (T)array;
+					return cls.cast(ctx.data.getBytes(1));
 				} else if (cls == short[].class) {
-					short[] array = new short[columns.size()];
+					short[] array = new short[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getShort(index + 1);
+						array[index] = ctx.data.getShort(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == int[].class) {
-					int[] array = new int[columns.size()];
+					int[] array = new int[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getInt(index + 1);
+						array[index] = ctx.data.getInt(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == long[].class) {
-					long[] array = new long[columns.size()];
+					long[] array = new long[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getLong(index + 1);
+						array[index] = ctx.data.getLong(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == float[].class) {
-					float[] array = new float[columns.size()];
+					float[] array = new float[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getFloat(index + 1);
+						array[index] = ctx.data.getFloat(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == double[].class) {
-					double[] array = new double[columns.size()];
+					double[] array = new double[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getDouble(index + 1);
+						array[index] = ctx.data.getDouble(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == String[].class) {
-					String[] array = new String[columns.size()];
+					String[] array = new String[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getString(index + 1);
+						array[index] = ctx.data.getString(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == char[].class) {
-					char[] array = new char[columns.size()];
-					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getString(index + 1).charAt(0);
-					}
-					return (T)array;
+					return cls.cast(ctx.data.getString(1).toCharArray());
 				} else if (cls == java.util.Date[].class) {
-					java.util.Date[] array = new java.util.Date[columns.size()];
+					java.util.Date[] array = new java.util.Date[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getDate(index + 1);
+						array[index] = ctx.data.getDate(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == java.sql.Date[].class) {
-					java.sql.Date[] array = new java.sql.Date[columns.size()];
+					java.sql.Date[] array = new java.sql.Date[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getDate(index + 1);
+						array[index] = ctx.data.getDate(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Object[].class) {
-					Object[] array = new Object[columns.size()];
+					Object[] array = new Object[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getObject(index + 1);
+						array[index] = ctx.data.getObject(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Byte[].class) {
-					Byte[] array = new Byte[columns.size()];
+					Byte[] array = new Byte[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getByte(index + 1);
+						array[index] = ctx.data.getByte(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Short[].class) {
-					Short[] array = new Short[columns.size()];
+					Short[] array = new Short[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getShort(index + 1);
+						array[index] = ctx.data.getShort(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Integer[].class) {
-					Integer[] array = new Integer[columns.size()];
+					Integer[] array = new Integer[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getInt(index + 1);
+						array[index] = ctx.data.getInt(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Long[].class) {
-					Long[] array = new Long[columns.size()];
+					Long[] array = new Long[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getLong(index + 1);
+						array[index] = ctx.data.getLong(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Float[].class) {
-					Float[] array = new Float[columns.size()];
+					Float[] array = new Float[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getFloat(index + 1);
+						array[index] = ctx.data.getFloat(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Double[].class) {
-					Double[] array = new Double[columns.size()];
+					Double[] array = new Double[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getDouble(index + 1);
+						array[index] = ctx.data.getDouble(index + 1);
 					}
-					return (T)array;
+					return cls.cast(array);
 				} else if (cls == Character[].class) {
-					Character[] array = new Character[columns.size()];
+					Character[] array = new Character[ctx.availableColumns.size()];
 					for (int index = 0; index < array.length; ++ index) {
-						array[index] = rs.getString(index + 1).charAt(0);
+						array[index] = ctx.data.getString(index + 1).charAt(0);
 					}
-					return (T)array;
+					return cls.cast(array);
 				}
 				throw new IllegalArgumentException("unhandeled type: " + cls.getName());
 			} else if (cls.isPrimitive()) {
 				throw new IllegalArgumentException("unhandeled type: " + cls.getName());
 			}
 
-			T object = cls.newInstance();
-			load(object, rs, columns);
+			Type object = cls.newInstance();
+			ctx.load(object);
 			return object;
 		} catch (IllegalAccessException e) {
 			throw new RuntimeException(e);
@@ -379,12 +376,24 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 			throw new RuntimeException(e);
 		}
 	}
+	
+	private Set<String> getInclude() {
+		Set<String> include = new HashSet<>();
+		if (this.include != null) {
+			for (String field : this.include) {
+				include.add(field);
+			}
+		}
+		return include;
+	}
 
 	public<NewT> NewT first(Class<NewT> cls) throws SQLException {
 		try (ResultSet rs = execute()) {
 			if (rs.next()) {
 				Set<String> columns = getColumns(rs);
-				return fetch(cls, rs, columns);
+				Set<String> include = getInclude();
+				LoadContext ctx = new LoadContext(con, rs, columns, include);
+				return fetch(cls, ctx);
 			}
 			return null;
 		}
@@ -403,7 +412,9 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 		try (ResultSet rs = execute()) {
 			if (rs.next()) {
 				Set<String> columns = getColumns(rs);
-				load(object, rs, columns);
+				Set<String> include = getInclude();
+				LoadContext ctx = new LoadContext(con, rs, columns, include);
+				ctx.load(object);
 				return;
 			}
 		}
@@ -414,8 +425,10 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 		List<T> result = new ArrayList<>();
 		try (ResultSet rs = execute()) {
 			Set<String> columns = getColumns(rs);
+			Set<String> include = getInclude();
+			LoadContext ctx = new LoadContext(con, rs, columns, include);
 			while (rs.next()) {
-				result.add(fetch(cls, rs, columns));
+				result.add(fetch(cls, ctx));
 			}
 		}
 		return result;
@@ -429,28 +442,6 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 		}
 		
 		return columns;
-	}
-	
-	private static void load(Object object, ResultSet data, Set<String> columns) throws SQLException {
-		Class<?> cls = object.getClass();
-		while (cls != null && cls != Object.class) {
-			for (Field field : cls.getDeclaredFields()) {
-				if ((field.getModifiers() & Modifier.TRANSIENT) == 0) {
-					String name = Util.toSnakeCase(field.getName());
-					if (columns.contains(name)) {
-						Object value = data.getObject(name);
-						if (value != null || !field.getType().isPrimitive()) {
-							try {
-								field.set(object, value);
-							} catch (IllegalAccessException e) {
-								throw new RuntimeException(e);
-							}
-						}
-					}
-				}
-			}
-			cls = cls.getSuperclass();
-		}
 	}
 
 	public ResultSet execute() throws SQLException {
@@ -470,8 +461,6 @@ public class SelectBuilder<T> extends QueryBuilderBase<SelectBuilder<T>> {
 		}
 		buf.append(" FROM ");
 		config.escapeName(tablename, buf);
-
-		// TODO: include
 
 		if (where != null && where.length > 0) {
 			buf.append(" WHERE (");

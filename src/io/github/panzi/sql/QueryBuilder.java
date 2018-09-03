@@ -1,6 +1,7 @@
 package io.github.panzi.sql;
 
-import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -12,7 +13,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import io.github.panzi.sql.annotations.Field;
+import io.github.panzi.sql.annotations.Mapping;
 import io.github.panzi.sql.config.Config;
+import io.github.panzi.sql.internal.Name;
+import io.github.panzi.sql.internal.Util;
 
 public class QueryBuilder extends QueryBuilderBase<QueryBuilder> {
 	public static QueryBuilder query(Connection con) throws SQLException {
@@ -63,6 +68,10 @@ public class QueryBuilder extends QueryBuilderBase<QueryBuilder> {
 		return new SelectBuilder<>(this, null, null, cls, null, null, -1, -1);
 	}
 
+	public<T> SelectBuilder<T> from(Class<T> cls, String tablename) {
+		return new SelectBuilder<>(this, null, tablename, cls, null, null, -1, -1);
+	}
+	
 	public SelectBuilder<?> include(String... include) {
 		return new SelectBuilder<>(this, null, null, null, include, null, -1, -1);
 	}
@@ -124,19 +133,106 @@ public class QueryBuilder extends QueryBuilderBase<QueryBuilder> {
 	protected Map<String, Object> getValues(Object object) {
 		Map<String, Object> values = new HashMap<>();
 		Class<?> cls = object.getClass();
-		while (cls != null && cls != Object.class) {
-			for (Field field : cls.getDeclaredFields()) {
-				if ((field.getModifiers() & Modifier.TRANSIENT) == 0) {
-					String name = field.getName();
-					try {
-						values.put(Util.toCamelCase(name), field.get(object));
-					} catch (IllegalAccessException e) {
-						throw new RuntimeException(e);
+		Map<String, Field> fieldDefs = Util.getFields(cls);
+		boolean onlyDeclared = Util.getOnlyDeclared(cls);
+
+		for (Method method : cls.getMethods()) {
+			String name = method.getName();
+			if (
+					method.getParameterTypes().length == 0 &&
+					!method.isVarArgs() &&
+					method.getDeclaringClass() != Object.class &&
+					name.length() > 3 &&
+					name.startsWith("get") &&
+					Character.isUpperCase(name.charAt(3))) {
+				String javaName = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+				Field field = fieldDefs.get(javaName);
+				String columnName = "";
+				Mapping mapping = Mapping.VALUE;
+				if (field != null) {
+					columnName = field.columnName();
+					mapping = field.mapping();
+					
+					if (mapping != Mapping.BELONGS_TO) {
+						continue;
+					}
+				} else if (onlyDeclared) {
+					continue;
+				}
+
+				if (values.containsKey(columnName)) {
+					continue;
+				}
+
+				if (columnName.length() == 0) {
+					columnName = Util.toSnakeCase(javaName);
+					if (mapping == Mapping.BELONGS_TO) {
+						columnName += "_id";
 					}
 				}
+
+				Object value;
+				try {
+					value = method.invoke(object);
+				} catch (IllegalAccessException | IllegalArgumentException e) {
+					// didn't work, hope there's another getter or field with a compatible type
+					continue;
+				} catch (InvocationTargetException e) {
+					throw new RuntimeException(e);
+				}
+
+				if (value != null && mapping == Mapping.BELONGS_TO) {
+					value = Util.getId(value);
+				}
+
+				values.put(columnName, value);
 			}
-			cls = cls.getSuperclass();
 		}
+
+		for (java.lang.reflect.Field objField : cls.getFields()) {
+			if ((objField.getModifiers() & Modifier.TRANSIENT) == 0) {
+				String javaName = objField.getName();
+				Field field = fieldDefs.get(javaName);
+				String columnName = "";
+				Mapping mapping = Mapping.VALUE;
+				if (field != null) {
+					columnName = field.columnName();
+					mapping = field.mapping();
+					
+					if (mapping != Mapping.BELONGS_TO) {
+						continue;
+					}
+				} else if (onlyDeclared) {
+					continue;
+				}
+
+				if (values.containsKey(columnName)) {
+					continue;
+				}
+
+				if (columnName.length() == 0) {
+					columnName = Util.toSnakeCase(javaName);
+					if (mapping == Mapping.BELONGS_TO) {
+						columnName += "_id";
+					}
+				}
+
+				Object value;
+				try {
+					value = objField.get(object);
+				} catch (IllegalAccessException | IllegalArgumentException e) {
+					// didn't work, hope there's another field with a compatible type
+					continue;
+				}
+
+				if (value != null && mapping == Mapping.BELONGS_TO) {
+					value = Util.getId(value);
+				}
+
+				values.put(columnName, value);
+			}
+		}
+
 		return values;
 	}
 

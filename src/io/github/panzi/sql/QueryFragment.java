@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 
 import io.github.panzi.sql.config.Config;
+import io.github.panzi.sql.internal.Name;
 
 public abstract class QueryFragment {
 	protected final String query;

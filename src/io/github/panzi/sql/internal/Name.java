@@ -1,4 +1,4 @@
-package io.github.panzi.sql;
+package io.github.panzi.sql.internal;
 
 import io.github.panzi.sql.config.Config;
 

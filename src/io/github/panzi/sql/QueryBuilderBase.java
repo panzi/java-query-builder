@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 
 import io.github.panzi.sql.config.Config;
+import io.github.panzi.sql.internal.ColumnName;
+import io.github.panzi.sql.internal.Util;
 
 public abstract class QueryBuilderBase<T extends QueryBuilderBase<?>> {
 	protected final Connection con;
